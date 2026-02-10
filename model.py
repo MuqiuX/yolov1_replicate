@@ -96,9 +96,8 @@ class YOLOModule(nn.Module):
         x = self.features(x)      # [B, 3, 448, 448] -> [B, 1024, 7, 7]
         x = self.fc_layers(x)     # [B, 1024, 7, 7] -> [B, 7, 7, 30]
         return x
-    
-if __name__ == '__main__':
+
+def create_model(args):
     model = YOLOModule()
-    image = torch.rand(20, 3, 448, 448)
-    result = model(image)
-    print(result.shape)
+    
+    return model

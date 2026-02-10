@@ -8,17 +8,15 @@ class LossModul(nn.Module):
         '''
         __init__ 的 Docstring
         
-        :param self: 说明
-        :param S: 说明
-        :param B: 说明
-        :param C: 说明
-        :param lambda_coord: 说明
-        :param lambda_noobj: 说明
+        :param S: 网格边长
+        :param B: 每个grid cell 预测的bounding box数
+        :param C: 预测类别数量
+        :param lambda_coord: 宽高损失系数
+        :param lambda_noobj: 无目标置信度损失系数
         '''
         
         super().__init__()
         self.S=S
-         
         self.B=B
         self.C=C
         self.lambda_coord=lambda_coord
@@ -27,51 +25,76 @@ class LossModul(nn.Module):
     def forward(self, predicts, targets):
         '''
         forward 的 Docstring
-        
-        :param self: 说明
-        :param predicts: [7,7,30] -> (x,y,w,h,c,x,y,w,h,class...x20)
-        :param targets: [7,7,30] -> (x,y,w,h,c,x,y,w,h,class...x20)
+        x和y表示的是中心点相对于对应grid cell的比例坐标
+        :param predicts: [batch, 7,7,30] -> (x,y,w,h,c,x,y,w,h,class...x20)
+        :param targets: [batch, 7,7,30] -> (x,y,w,h,c,x,y,w,h,class...x20)
+        对于targets来说, grid cell如果存在目标两个bbox的值完全相等，否则都为0
         '''
         
-        # 预测值分离 -> [S, S, 5]
+        # 预测值分离
         pre_bbox1 = predicts[..., :5]
         pre_bbox2 = predicts[..., 5:10]
         pre_cls = predicts[..., 10:]
         
-        # 目标值分离 -> [S, S, 5]
-        tar_bbox1 = targets[..., :5]
-        tar_bbox2 = targets[..., 5:10]
+        # 目标值分离, 由于目标的每个grid cell的两个bbox都相同，所以只取一个
+        tar_bbox = targets[..., :5]
         tar_cls = targets[..., 10:]
         
-        # 获取掩码
+        # 获取存在物体掩码和不存在物体掩码
+        # 由于只要存在目标该grid cell的bbox置信度都为1否则为0，所以直接使用>0判断
         obj_mask = targets[..., 4] > 0
         noobj_mask = ~obj_mask
         
-        # 计算iou
-        pre_box1_abs = torch.zeros_like(pre_bbox1[..., :4]) # [S, S, 4]
+        # 计算iou，由于bbox的x，y表示的是相对于grid cell的左上角的坐标
+        # 所以需要得到绝对坐标， 采用的方法是将每个gird cell的长度都当作1来计算
         
-        pre_box1_abs[..., 0] = pre_bbox1[..., 0] - pre_bbox1[..., 2] / 2  # x1
-        pre_box1_abs[..., 1] = pre_bbox1[..., 1] - pre_bbox1[..., 3] / 2  # y1
-        pre_box1_abs[..., 2] = pre_bbox1[..., 0] + pre_bbox1[..., 2] / 2  # x2
-        pre_box1_abs[..., 3] = pre_bbox1[..., 1] + pre_bbox1[..., 3] / 2  # y2
+        # 创建表示0 - 7的网格
+        grid_x = torch.arange(self.S).view(1, -1).repeat(self.S, 1).float()
+        grid_y = torch.arange(self.S).view(-1, 1).repeat(1, self.S).float()
         
-        pre_box2_abs = torch.zeros_like(pre_bbox2[..., :4]) # [S, S, 4]
+        # 得到比例
+        ratio = 1.0 / float(self.S)
         
-        pre_box2_abs[..., 0] = pre_bbox2[..., 0] - pre_bbox2[..., 2] / 2  # x1
-        pre_box2_abs[..., 1] = pre_bbox2[..., 1] - pre_bbox2[..., 3] / 2  # y1
-        pre_box2_abs[..., 2] = pre_bbox2[..., 0] + pre_bbox2[..., 2] / 2  # x2
-        pre_box2_abs[..., 3] = pre_bbox2[..., 1] + pre_bbox2[..., 3] / 2  # y2
+        # tips: 不同维度的tensor相加会升维
+        # [batch, S, S] + [S, S] = ... + [S, S].unsqueeze(0).repeat(batch, 1, 1)
         
-        tar_box_abs = torch.zeros_like(tar_bbox1[..., :4])
+        # 预测框1绝对坐标
+        pre_bbox1_abs = torch.zeros_like(pre_bbox1[..., :4])
+        pre_bbox1_abs[..., 0] = (pre_bbox1[..., 0] + grid_x) * ratio
+        pre_bbox1_abs[..., 1] = (pre_bbox1[..., 1] + grid_y) * ratio
+        pre_bbox1_abs[..., 2] = pre_bbox1[..., 2]
+        pre_bbox1_abs[..., 3] = pre_bbox1[..., 3]
         
-        tar_box_abs[..., 0] = tar_bbox1[..., 0] - tar_bbox1[..., 2] / 2  # x1
-        tar_box_abs[..., 1] = tar_bbox1[..., 1] - tar_bbox1[..., 3] / 2  # y1
-        tar_box_abs[..., 2] = tar_bbox1[..., 0] + tar_bbox1[..., 2] / 2  # x2
-        tar_box_abs[..., 3] = tar_bbox1[..., 1] + tar_bbox1[..., 3] / 2  # y2
+        # 预测框2绝对坐标
+        pre_bbox2_abs = torch.zeros_like(pre_bbox2[..., :4])
+        pre_bbox2_abs[..., 0] = (pre_bbox2[..., 0] + grid_x) * ratio
+        pre_bbox2_abs[..., 1] = (pre_bbox2[..., 1] + grid_y) * ratio
+        pre_bbox2_abs[..., 2] = pre_bbox2[..., 2]
+        pre_bbox2_abs[..., 3] = pre_bbox2[..., 3]
+        
+        # 目标框绝对坐标
+        tar_bbox_abs = torch.zeros_like(tar_bbox[..., :4])
+        tar_bbox_abs[..., 0] = (tar_bbox[..., 0] + grid_x) * ratio
+        tar_bbox_abs[..., 1] = (tar_bbox[..., 1] + grid_y) * ratio
+        tar_bbox_abs[..., 2] = tar_bbox[..., 2]
+        tar_bbox_abs[..., 3] = tar_bbox[..., 3]
+        
+        def cxcywh_to_xyxy(boxes):
+            """将 (cx, cy, w, h) 转换为 (x1, y1, x2, y2)"""
+            xyxy = torch.zeros_like(boxes)
+            xyxy[..., 0] = boxes[..., 0] - boxes[..., 2] / 2  # x1
+            xyxy[..., 1] = boxes[..., 1] - boxes[..., 3] / 2  # y1
+            xyxy[..., 2] = boxes[..., 0] + boxes[..., 2] / 2  # x2
+            xyxy[..., 3] = boxes[..., 1] + boxes[..., 3] / 2  # y2
+            return xyxy
+        
+        pre_bbox1_xyxy = cxcywh_to_xyxy(pre_bbox1_abs)
+        pre_bbox2_xyxy = cxcywh_to_xyxy(pre_bbox2_abs)
+        tar_bbox_xyxy = cxcywh_to_xyxy(tar_bbox_abs)
         
         # 展平再计算iou -> [batch * S * S, batch * S * S]
-        iou1 = box_iou(pre_box1_abs.view(-1, 4), tar_box_abs.view(-1, 4))
-        iou2 = box_iou(pre_box2_abs.view(-1, 4), tar_box_abs.view(-1, 4))
+        iou1 = box_iou(pre_bbox1_xyxy.view(-1, 4), tar_bbox_xyxy.view(-1, 4))
+        iou2 = box_iou(pre_bbox2_xyxy.view(-1, 4), tar_bbox_xyxy.view(-1, 4))
         
         # 取对角元素，重塑 -> [batch, S, S]
         iou1 = iou1.diag().view(-1, self.S, self.S)
@@ -88,14 +111,14 @@ class LossModul(nn.Module):
             mask1 = obj_mask & responsible_mask # grid cell 包含目标且box1交并比最大
             loss_xy += F.mse_loss(
                 pre_bbox1[mask1][..., :2],
-                tar_bbox1[mask1][..., :2],
+                tar_bbox[mask1][..., :2],
                 reduction='sum'
             )
             
             mask2 = obj_mask & (~responsible_mask) # grid cell 包含目标且box2交并比最大
             loss_xy += F.mse_loss(
                 pre_bbox2[mask2][..., :2], 
-                tar_bbox1[mask2][..., :2], 
+                tar_bbox[mask2][..., :2], 
                 reduction='sum'
             )
             
@@ -104,14 +127,14 @@ class LossModul(nn.Module):
             mask1 = obj_mask & responsible_mask
             loss_wh += F.mse_loss(
                 torch.sqrt(torch.clamp(pre_bbox1[mask1][..., 2:4], min=1e-6)),
-                torch.sqrt(torch.clamp(tar_bbox1[mask1][..., 2:4], min=1e-6)),
+                torch.sqrt(torch.clamp(tar_bbox[mask1][..., 2:4], min=1e-6)),
                 reduction='sum'
             )
             
             mask2 = obj_mask & (~responsible_mask)
             loss_wh += F.mse_loss(
                 torch.sqrt(torch.clamp(pre_bbox2[mask2][..., 2:4], min=1e-6)),
-                torch.sqrt(torch.clamp(tar_bbox1[mask2][..., 2:4], min=1e-6)),
+                torch.sqrt(torch.clamp(tar_bbox[mask2][..., 2:4], min=1e-6)),
                 reduction='sum'
             )
             
@@ -179,15 +202,9 @@ class LossModul(nn.Module):
         # 总损失
         total_loss = coord_loss + conf_loss + cls_loss
         
-        return total_loss
-        
-if __name__ == '__main__':
-    lossfc = LossModul()
+        return total_loss.float()
+
+def create_loss_fn(args):
+    fn = LossModul()
     
-    pre = torch.rand(20, 7, 7, 30)
-    tar = pre = torch.rand(20, 7, 7, 30)
-    
-    result = lossfc(pre, tar)
-    
-    print(result)
-        
+    return fn
