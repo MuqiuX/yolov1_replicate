@@ -95,11 +95,3 @@ class ArrayToTensor(nn.Module):
         
     def forward(self, arr):
         return torch.from_numpy(arr)
-        
-
-# 0 1 2 3 4 5 6 7
-if __name__ == '__main__':
-    img = Image.open(r'D:\longtime\dataset\yolov\images\new1.jpg')
-    model = ToRequired()
-    l = model(img, np.random.rand(2, 5))
-    print(l)
