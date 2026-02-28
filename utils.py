@@ -1,7 +1,47 @@
 import xml.etree.ElementTree as ET
 import os
+import albumentations as A
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
 
-def voc_to_yolo(xml_file: str, classes: list[str]) -> list[list]:
+def visualize_with_albumentations(
+    image: np.ndarray,
+    bboxes: np.ndarray,
+    class_labels: np.ndarray,
+    classes: np.ndarray
+    ):
+    
+    # 空转化， 裁剪
+    visualize = A.Compose([
+        A.NoOp()
+    ], bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
+    
+    result = visualize(image=image, bboxes=bboxes, class_labels=class_labels)
+    
+    fig, ax = plt.subplots(1, figsize=(5, 5))
+    
+    ax.imshow(result['image'])
+    
+    for bbox, label in zip(result['bboxes'], result['class_labels']):
+        x_center, y_center, width, height = bbox
+        h, w = image.shape[:2]
+        
+        x_min = (x_center - width / 2) * w
+        y_min = (y_center - height / 2) * h
+        x_max = width * w
+        y_max = height * h
+        
+        rect = plt.Rectangle((x_min, y_min), x_max, y_max, 
+                            fill=False, color='red', linewidth=2)
+        ax.add_patch(rect)
+        ax.text(x_min, y_min, classes[int(label)], 
+               color='red', fontsize=12, weight='bold')
+    
+    plt.axis('off')
+    plt.show()
+
+def voc_to_yolo(xml_file: str, classes: list[str]) -> np.ndarray:
     """读取voc数据集标注文件，转化成yolo标注格式返回
 
     Args:
@@ -53,4 +93,4 @@ def voc_to_yolo(xml_file: str, classes: list[str]) -> list[list]:
         
         annotations.append([class_idx, x_center, y_center, box_w, box_h])
     
-    return annotations
+    return np.array(annotations)

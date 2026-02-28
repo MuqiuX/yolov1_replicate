@@ -5,10 +5,9 @@ from dataclasses import dataclass
 class YOLOv1Config:
     """YOLOv1配置类"""
     # 数据配置
-    data_dir: str = r'.\data\VOCdevkit2007\VOC2007'
-    train_ann: str = r'.\data\VOCdevkit2007\VOC2007\ImageSets\Main\train.json'
-    val_ann: str = r'.\data\VOCdevkit2007\VOC2007\ImageSets\Main\val.json'
-    test_ann: str = 'test.json'
+    image_dir: str = r'D:\longtime\yolov1_reproduce\data\VOCdevkit2007\VOC2007\JPEGImages'
+    ann_dir: str = r'D:\longtime\yolov1_reproduce\data\VOCdevkit2007\VOC2007\Annotations'
+    image_set_dir: str = r'D:\longtime\yolov1_reproduce\data\VOCdevkit2007\VOC2007\ImageSets\Main'
     
     # 模型配置
     S: int = 7
@@ -47,6 +46,13 @@ class YOLOv1Config:
     # 其他
     seed: int = 42
     debug: bool = False
+    
+    class_names: list = [
+            'aeroplane', 'bicycle', 'bird', 'boat', 'bottle',
+            'bus', 'car', 'cat', 'chair', 'cow',
+            'diningtable', 'dog', 'horse', 'motorbike', 'person',
+            'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+        ]
     
     def __post_init__(self):
         """初始化后处理"""

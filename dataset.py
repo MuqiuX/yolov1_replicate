@@ -1,11 +1,11 @@
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import os
-from PIL import Image
-from transforms import ToRequired
 from typing import Literal
-import albumentations as A
 from utils import voc_to_yolo
+import cv2
+from transforms import ToV1Label, ToV1Size
+import torch
 
 class YOLODataset(Dataset):
     """加载voc数据集，并且转化成yolo标注格式
@@ -23,66 +23,60 @@ class YOLODataset(Dataset):
         self,
         label_path: str,
         image_path: str,
+        image_set_path: str,
         type: Literal['val', 'train'],
-        classes: list[str],
-        transform=None,
-        target_transform=None
+        classes: list[str]
     ):
         self.label_path = label_path
         self.image_path = image_path
+        self.image_set_path = image_set_path
         
         self.classes = classes
         self.class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
         
         self.type = type
+        
+        self.transform = ToV1Size()
+        self.target_transform = ToV1Label()
 
-        # 加载训练数据集列表
         self.names = []
         self.load_names()
-        
-        self.to_yolov1_annotation_model = ToRequired(transform=transform, target_transform=target_transform)
     
     def __len__(self):
         return len(self.names)
 
     def __getitem__(self, idx):
-        # 加载图片和标注
-        img_path = os.path.join(self.images_dir, self.names[idx] + '.jpg')
-        label_path = os.path.join(self.annotations_dir, self.names[idx] + '.xml')
         
-        image = Image.open(img_path).convert('RGB')
-        labels = self.parse_xml(label_path)
+        img_file = os.path.join(self.image_path, self.names[idx] + '.jpg')
+        label_file = os.path.join(self.label_path, self.names[idx] + '.xml')
         
-        transform = A.Compose([
-            A.Resize(height=512, width=512),
-            A.HorizontalFlip(p=0.5)
-        ], bbox_params=A.BboxParams(
-            format='yolo',
-            label_fields=['bbox_class'],
-            clip=True
-        ))
+        image = cv2.imread(img_file)
+        label = voc_to_yolo(label_file, self.classes)
         
-        transform()
+        if self.transform != None:
+            image, label = self.transform(
+                image=image,
+                label=label
+            )
         
-        f_image, f_target = self.to_yolov1_annotation_model(image, labels)
+        if self.target_transform != None:
+            label = self.target_transform(
+                label=label
+            )
         
-        return f_image, f_target.float()
+        image = torch.from_numpy(image)
+        label = torch.from_numpy(label)
+        
+        return image, label
     
     def load_names(self, path: str = None):
-        '''
-        load_train_names 的 Docstring
-            
-        :param self: 说明
-        :param path: 训练数据集文件， 如果没有指定则使用默认
-        :type path: str
-        '''
         if path is None or (path and not path.endswith('.txt')):
-            name_list_file = os.path.join(self.root, 'ImageSets', 'Main', f'{self.type}.txt')
+            name_list_file = os.path.join(self.image_set_path, f'{self.type}.txt')
         else:
             name_list_file = path
         
         if not os.path.exists(name_list_file):
-            raise FileNotFoundError(f'训练数据集文件不存在: {name_list_file}')
+            raise FileNotFoundError(f'数据集文件不存在: {name_list_file}')
         
         self.names.clear()
         
@@ -93,21 +87,21 @@ class YOLODataset(Dataset):
                 if line.strip()
             )
     
-def get_dataloader(args):
+def get_dataloader(args: dict):
     train_dataset = YOLODataset(
-        voc_root=args['voc_root'],
+        image_path=args['image_dir'],
+        image_set_path=['image_set_dir'],
+        label_path=args['ann_dir'],
         classes=args['classes'],
-        type='train',
-        transform=args['transform'],
-        target_transform=args['target_transform']
+        type='train'
     )
     
     val_dataset = YOLODataset(
-        voc_root=args['voc_root'],
+        image_path=args['image_dir'],
+        image_set_path=['image_set_dir'],
+        label_path=args['ann_dir'],
         classes=args['classes'],
-        type='val',
-        transform=args['transform'],
-        target_transform=args['target_transform']
+        type='val'
     )
     
     train_loader = DataLoader(

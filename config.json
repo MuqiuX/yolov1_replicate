@@ -1,0 +1,57 @@
+{
+    "image_dir": "D:\\longtime\\yolov1_reproduce\\data\\VOCdevkit2007\\VOC2007\\JPEGImages",
+    "ann_dir": "D:\\longtime\\yolov1_reproduce\\data\\VOCdevkit2007\\VOC2007\\Annotations",
+    "image_set_dir": "D:\\longtime\\yolov1_reproduce\\data\\VOCdevkit2007\\VOC2007\\ImageSets\\Main",
+
+    "S": 7,
+    "B": 2,
+    "C": 20,
+
+    "epochs": 135,
+    "batch_size": 64,
+    "lr": 0.001,
+    "weight_decay": 0.0005,
+    "momentum": 0.9,
+    "lambda_coord": 5.0,
+    "lambda_noobj": 0.5,
+    "lambda_class": 1.0,
+
+    "device": "cpu",
+    "num_workers": 4,
+    "pin_memory": true,
+
+    "save_dir": "./checkpoints",
+    "log_dir": "./logs",
+    "save_interval": 10,
+    "eval_interval": 5,
+
+    "image_size": 448,
+    "in_channels": 3,
+    "use_hflip": true,
+    "use_color_jitter": true,
+    "use_random_crop": true,
+    "seed": 42,
+    "debug": false,
+    "class_names": [
+        "aeroplane",
+        "bicycle",
+        "bird",
+        "boat",
+        "bottle",
+        "bus",
+        "car",
+        "cat",
+        "chair",
+        "cow",
+        "diningtable",
+        "dog",
+        "horse",
+        "motorbike",
+        "person",
+        "pottedplant",
+        "sheep",
+        "sofa",
+        "train",
+        "tvmonitor"
+    ]
+}

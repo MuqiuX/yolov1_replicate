@@ -1,6 +1,5 @@
 from torch import nn
 import numpy as np
-import torch
 from torch import Tensor
 import albumentations as A
 import cv2
@@ -14,7 +13,9 @@ class ToV1Size(nn.Module):
         self.B = B
         self.C = C
         
-    def forward(self, image: np.ndarray, label: np.ndarray):
+    def forward(self, image: np.ndarray, label: np.ndarray) -> dict[str, any]:
+        
+        label = label.copy()
         
         # 对输入标注进行拆分
         # 对坐标部分赋值
@@ -40,8 +41,13 @@ class ToV1Size(nn.Module):
             bbox_class=classes
         )
         
+        resized_image = result['image']
         resized_bboxes = result['bboxes']
-        resized_bbox_class = result['bbox_class']
+        resized_classes = result['bbox_class']
+        
+        resized_label = np.column_stack([resized_classes, resized_bboxes])
+        
+        return resized_image, resized_label
         
     
 class ToV1Label(nn.Module):
@@ -85,4 +91,4 @@ class ToV1Label(nn.Module):
                 
             target_label[coord[0], coord[1], :] = grid_cell_label
             
-        return torch.from_numpy(target_label)
+        return target_label
