@@ -1,7 +1,9 @@
 from torch import nn
 import numpy as np
 from torch import Tensor
+import torch
 import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import cv2
 
 class ToV1Size(nn.Module):
@@ -29,7 +31,12 @@ class ToV1Size(nn.Module):
                 interpolation=cv2.INTER_CUBIC,
                 area_for_downscale='image',
                 ),
-            A.HorizontalFlip(p=0.5)
+            A.HorizontalFlip(p=0.5),
+            A.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            ),
+            ToTensorV2()
         ], bbox_params=A.BboxParams(
             format='yolo',
             label_fields=['bbox_class'],
@@ -91,4 +98,4 @@ class ToV1Label(nn.Module):
                 
             target_label[coord[0], coord[1], :] = grid_cell_label
             
-        return target_label
+        return torch.from_numpy(target_label)

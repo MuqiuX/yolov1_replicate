@@ -1,7 +1,4 @@
 from torch import nn
-import torch
-
-import torch.nn as nn
 
 class YOLOModule(nn.Module):
     def __init__(self, S=7, B=2, C=20):

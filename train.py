@@ -8,6 +8,7 @@ import torch
 from torch.optim.lr_scheduler import SequentialLR, LinearLR, MultiStepLR
 import argparse
 import json
+import sys
 
 def save_checkpoint(epoch, model, optimizer, scheduler, loss, path):
     """保存检查点"""
@@ -42,49 +43,49 @@ def load_checkpoint(path, model, optimizer, scheduler, device):
     
     return start_epoch, best_loss
 
-def train_epoch(model, train_loader, loss_fn, optimizer, device, writer, epoch):
+def train_epoch(model, train_loader, loss_fn, optimizer, device):
     model.train()
-    
-    running_loss = 0.
-    last_loss = 0.
+    total_loss = 0.0
+    num_batches = 0
     
     for i, data in enumerate(train_loader):
         inputs, labels = data
         
         inputs = inputs.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
+        
+        try:
     
-        optimizer.zero_grad()
+            optimizer.zero_grad()
+            # 向前传播
+            outputs = model(inputs)
+            # 计算损失
+            loss = loss_fn(outputs, labels)
+            # 向后传播
+            loss.backward()
+            # 调整权重
+            optimizer.step()
+            
+            total_loss += loss.item()
+            num_batches += 1
         
-        # 向前传播
-        outputs = model(inputs)
-        
-        # 计算损失
-        loss = loss_fn(outputs, labels)
-        
-        # 向后传播
-        loss.backward()
-        
-        # 调整权重
-        optimizer.step()
-        
-        running_loss += loss.item()
-        print(i)
+        except Exception as e:
+            print(e)
         
         if i % 100 == 99:
-            last_loss = running_loss / 100
-            print(f'    batch {i + 1} loss: {last_loss}')
-            running_loss = 0.           
-        
-    return last_loss
+            print(f'    batch {i + 1} loss: {loss.item()}')           
+    
+    mean_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    
+    return mean_loss
         
 def validate(model, val_loader, loss_fn, device):
     model.eval()
-    
-    total_loss = 0
+    total_loss = 0.0
+    num_batches = 0
     
     with torch.no_grad():
-        for i, (images, targets) in val_loader:
+        for images, targets in val_loader:
             
             images = images.to(device)
             targets = targets.to(device)
@@ -94,8 +95,11 @@ def validate(model, val_loader, loss_fn, device):
             loss = loss_fn(outputs, targets)
             
             total_loss += loss.item()
+            num_batches += 1
     
-    return total_loss / (i + 1)
+    mean_loss = total_loss / num_batches if num_batches > 0 else 0.0
+    
+    return mean_loss
         
 def main(args: dict):
     device = args['device']
@@ -118,7 +122,7 @@ def main(args: dict):
         print(f"Warning: Could not add model graph to TensorBoard: {e}")
     
     # 损失函数
-    loss_fn = create_loss_fn(None)
+    loss_fn = create_loss_fn(args)
     loss_fn.to(device)
     
     # 优化器, 随机梯度下降
@@ -135,28 +139,27 @@ def main(args: dict):
     scheduler = SequentialLR(optimizer, schedulers=[warmup, decay], milestones=[10])
     
     start_epoch = 0
-    best_loss = float('inf')
+    best_val_loss = float('inf')
     
     if args.get('checkpoint'):
         checkpoint_path = args['checkpoint']
-        start_epoch, best_loss = load_checkpoint(
-            load_checkpoint, model, optimizer, scheduler, device
+        start_epoch, best_val_loss = load_checkpoint(
+            checkpoint_path, model, optimizer, scheduler, device
         )
-        print(f"Resuming training from epoch {start_epoch}, best val loss: {best_vloss:.4f}")
+        print(f"Resuming training from epoch {start_epoch}, best val loss: {best_val_loss:.4f}")
     else:
         print("Starting training from scratch.")
     
-    for epoch in range(args['epochs']):
+    for epoch in range(start_epoch, args['epochs']):
         print(f'\nEPOCH: {epoch + 1}/{args["epochs"]}')
         
         # 训练一个epoch
-        avg_loss = train_epoch(
+        train_loss = train_epoch(
             model=model,
             train_loader=train_loader,
             loss_fn=loss_fn,
             optimizer=optimizer,
-            device=device,
-            writer=writer
+            device=device
         )
         
         # 更新学习率
@@ -164,35 +167,76 @@ def main(args: dict):
         current_lr = optimizer.param_groups[0]['lr']
         
         # 验证
-        avg_vloss = validate(model=model, val_loader=val_loader,
-                             loss_fn=loss_fn, device=device)
+        val_loss = validate(
+            model=model,
+            val_loader=val_loader,
+            loss_fn=loss_fn, device=device
+        )
         
-        # 记录最好的模型
-        print(f'Epoch {epoch} Loss train: {avg_loss} val: {avg_vloss}')
-        if (avg_vloss < best_vloss):
-            best_vloss = avg_vloss
-            model_path = f'model_{timestamp}_{epoch}'
-            torch.save(model.state_dict(), model_path)
+        # 打印日志
+        print(f'Epoch {epoch} Loss train: {train_loss} val: {val_loss}')
+        
+        # tensorbroad 记录
+        writer.add_scalar('Loss/train_epoch', train_loss, epoch)
+        writer.add_scalar('Loss/val', val_loss, epoch)
+        writer.add_scalar('LearningRate', current_lr, epoch)
+        
+        # 保存最佳模型
+        if (val_loss < best_val_loss):
+            best_val_loss = val_loss
+            
+            save_path = os.path.join(args['save_dir'], f'yolov1_best.pth')
+            
+            save_checkpoint(
+                epoch=epoch,
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                loss=val_loss,
+                path=save_path
+            )
+            
+        # 定期保存检查点
+        save_interval = args['save_interval']
+        
+        if epoch % save_interval == save_interval - 1:
+            save_path = os.path.join(args['save_dir'], f'{timestamp}_epoch_{epoch + 1}.pth')
+            
+            save_checkpoint(
+                epoch=epoch,
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                loss=val_loss,
+                path=save_path
+            )
+            
+    writer.close()
+    print('Train finished !!!')
+        
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='YOLOv1 Training')
-    
-    # 配置文件路径
-    parser.add_argument('--config', type=str, default='config.json', 
-                        help='配置文件路径')
+
+    parser.add_argument('--config', type=str, default='config.json', help='配置文件路径')
     
     args, remaining = parser.parse_known_args()
     
-    with open(args.config, 'r') as f:
-        config = json.load(f)
+    config = {}
+    if os.path.exists(args.config):        
+        with open(args.config, 'r') as f:
+            config = json.load(f)
+    else:
+        print(f'配置文件不存在: {args.config}')
+        sys.exit(0)
         
     parser = argparse.ArgumentParser()
     for key, value in config.items():
         parser.add_argument(f'---{key}', type=type(value), default=value)
         
-    parser.add_argument('--checkpoint', type=str, default=None,
-                        help='从指定检查点开始继续训练')
+    parser.add_argument('--checkpoint', type=str, default=None, help='从指定检查点开始继续训练')
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
         
-    args = vars(parser.parse_args(remaining))
+    final_args = vars(parser.parse_args(remaining))
     
-    main(args)
+    main(final_args)

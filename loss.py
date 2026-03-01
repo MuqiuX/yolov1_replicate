@@ -240,9 +240,9 @@ def create_loss_fn(args: dict) -> nn.Module:
     fn = LossModul(
         S=args['S'],
         B=args['B'],
-        C=['C'],
-        lambda_coord=['lambda_coord'],
-        lambda_noobj=['lambda_noobj']
+        C=args['C'],
+        lambda_coord=args['lambda_coord'],
+        lambda_noobj=args['lambda_noobj']
     )
     
     return fn

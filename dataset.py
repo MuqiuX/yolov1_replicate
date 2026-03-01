@@ -5,7 +5,6 @@ from typing import Literal
 from utils import voc_to_yolo
 import cv2
 from transforms import ToV1Label, ToV1Size
-import torch
 
 class YOLODataset(Dataset):
     """加载voc数据集，并且转化成yolo标注格式
@@ -29,7 +28,6 @@ class YOLODataset(Dataset):
     ):
         self.label_path = label_path
         self.image_path = image_path
-        self.image_set_path = image_set_path
         
         self.classes = classes
         self.class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
@@ -40,7 +38,7 @@ class YOLODataset(Dataset):
         self.target_transform = ToV1Label()
 
         self.names = []
-        self.load_names()
+        self.load_names(image_set_path)
     
     def __len__(self):
         return len(self.names)
@@ -64,16 +62,11 @@ class YOLODataset(Dataset):
                 label=label
             )
         
-        image = torch.from_numpy(image)
-        label = torch.from_numpy(label)
-        
-        return image, label
+        return image.float(), label.float()
     
-    def load_names(self, path: str = None):
-        if path is None or (path and not path.endswith('.txt')):
-            name_list_file = os.path.join(self.image_set_path, f'{self.type}.txt')
-        else:
-            name_list_file = path
+    def load_names(self, image_set: str):
+        
+        name_list_file = os.path.join(image_set, f'{self.type}.txt')
         
         if not os.path.exists(name_list_file):
             raise FileNotFoundError(f'数据集文件不存在: {name_list_file}')
@@ -90,17 +83,17 @@ class YOLODataset(Dataset):
 def get_dataloader(args: dict):
     train_dataset = YOLODataset(
         image_path=args['image_dir'],
-        image_set_path=['image_set_dir'],
+        image_set_path=args['image_set_dir'],
         label_path=args['ann_dir'],
-        classes=args['classes'],
+        classes=args['class_names'],
         type='train'
     )
     
     val_dataset = YOLODataset(
         image_path=args['image_dir'],
-        image_set_path=['image_set_dir'],
+        image_set_path=args['image_set_dir'],
         label_path=args['ann_dir'],
-        classes=args['classes'],
+        classes=args['class_names'],
         type='val'
     )
     
