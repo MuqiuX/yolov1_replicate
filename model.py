@@ -29,7 +29,7 @@ class YOLOModule(nn.Module):
             nn.LeakyReLU(0.1, inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
 
-            # 第四组（4次重复）
+            # 第四组
             nn.Conv2d(512, 256, kernel_size=1),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Conv2d(256, 512, kernel_size=3, padding=1),
@@ -50,7 +50,6 @@ class YOLOModule(nn.Module):
             nn.Conv2d(256, 512, kernel_size=3, padding=1),
             nn.LeakyReLU(0.1, inplace=True),
 
-            # 最后两个卷积
             nn.Conv2d(512, 512, kernel_size=1),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Conv2d(512, 1024, kernel_size=3, padding=1),
@@ -86,6 +85,7 @@ class YOLOModule(nn.Module):
             nn.LeakyReLU(0.1),
             nn.Dropout(0.5),
             nn.Linear(4096, S * S * (B * 5 + C)),  # 7*7*(2*5+20)=1470
+            nn.ELU(),
             nn.Unflatten(dim=1, unflattened_size=(S, S, B * 5 + C))  # [B, 1470] -> [B, 7, 7, 30]
         )
 

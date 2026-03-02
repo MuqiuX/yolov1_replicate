@@ -1,6 +1,8 @@
+# python
 __pycache__
+
+# files
 test.py
 data
-test
 checkpoints
 runs
