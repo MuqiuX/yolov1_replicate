@@ -1,12 +1,14 @@
 import numpy as np
 
+# 以下layers支持batch， SoftmaxWithLoss 最后的计算取的是平均损失
+
 class Affine:
     """全连接层
     
     """
-    def __init__(self, w, b):
-        self.w = w
-        self.b = b
+    def __init__(self, input_size, out_size):
+        self.w = np.random.randn(input_size, out_size)
+        self.b = np.random.randn(out_size)
         
         self.x = None
         
@@ -21,6 +23,8 @@ class Affine:
     
     def backward(self, dout):
         dx = np.dot(dout, self.w.T)
+        
+        # 雅可比矩阵
         self.dw = np.dot(self.x.T, dout)
         self.db = np.sum(dout, axis=0)
         
@@ -42,12 +46,13 @@ class ReLU:
         dx = dout
         
         return dx
-    
-class Softmax:
+
+class SoftmaxWithLoss:
     def __init__(self, dim):
         self.dim = dim
     
     def forward(self, x):
+        # Softmax
         c = np.max(x, self.dim)
         epx_x = np.exp(x - c)
         sum_epx_x = np.sum(epx_x, axis=self.dim)
@@ -55,5 +60,9 @@ class Softmax:
         
         return y
     
-    def backward(self):
-        pass
+    def backward(self, dout):
+        
+        dx = (self.y - self.t) * dout
+        
+        return dx
+        
