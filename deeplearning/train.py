@@ -1,5 +1,4 @@
 from model import TwoLayerNet
-import numpy as np
 from dataset import get_dataloader
 import os
 
@@ -13,7 +12,7 @@ def train_epoch(model, loader):
         
         out = model.forward(images)
         
-        loss = model.loss_fn(out, labels)
+        loss = model.get_loss(out, labels)
         
         total_loss += loss
         
@@ -55,6 +54,6 @@ if __name__ == '__main__':
         'batch_size': 64,
         'lr': 0.01,
         'save_dir': r'D:\longtime\yolov1_reproduce\deeplearning\model',
-        'train_images': r'D:\longtime\yolov1_reproduce\deeplearning\data\MNIST\raw\train-images-idx3-ubyte',
-        'train_labels': r'D:\longtime\yolov1_reproduce\deeplearning\data\MNIST\raw\train-labels-idx1-ubyte'
+        'train_data': r'D:\longtime\yolov1_reproduce\deeplearning\data\MNIST\processed\training.pt',
+        'test_data': r'D:\longtime\yolov1_reproduce\deeplearning\data\MNIST\processed\test.pt'
     })

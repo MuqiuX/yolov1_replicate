@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 
 class YOLOModule(nn.Module):
     def __init__(self, S=7, B=2, C=20):
@@ -85,13 +86,14 @@ class YOLOModule(nn.Module):
             nn.LeakyReLU(0.1),
             nn.Dropout(0.5),
             nn.Linear(4096, S * S * (B * 5 + C)),  # 7*7*(2*5+20)=1470
-            nn.ELU(),
+            nn.Identity(),
             nn.Unflatten(dim=1, unflattened_size=(S, S, B * 5 + C))  # [B, 1470] -> [B, 7, 7, 30]
         )
 
     def forward(self, x):
         x = self.features(x)      # [B, 3, 448, 448] -> [B, 1024, 7, 7]
         x = self.fc_layers(x)     # [B, 1024, 7, 7] -> [B, 7, 7, 30]
+
         return x
 
 def create_model(args):

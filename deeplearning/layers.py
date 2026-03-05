@@ -50,17 +50,35 @@ class ReLU:
 class SoftmaxWithLoss:
     def __init__(self, dim):
         self.dim = dim
+        self.y = None
+        self.t = None
     
     def forward(self, x):
         # Softmax
-        c = np.max(x, self.dim)
+        c = np.max(x, self.dim).reshape(-1, 1)
         epx_x = np.exp(x - c)
-        sum_epx_x = np.sum(epx_x, axis=self.dim)
+        sum_epx_x = np.sum(epx_x, axis=self.dim).reshape(-1, 1)
         y = epx_x / sum_epx_x
+        self.y = y
         
         return y
     
+    def loss(self, y, t):
+        self.y = y
+        self.t = t
+        
+        if y.ndim == 1:
+            t = t.reshape(1, t.size)
+            y = y.reshape(1, y.size)
+            
+        batch_size = y.shape[0]
+        loss = -np.sum(t * np.log(y + 1e-7)) / batch_size
+        
+        return loss
+    
     def backward(self, dout):
+        batch_size = self.y.shape[0]
+        dout = 1.0 / batch_size
         
         dx = (self.y - self.t) * dout
         

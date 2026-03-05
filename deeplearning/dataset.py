@@ -1,16 +1,14 @@
-import struct
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+import torch
 
 class MNISTDataset(Dataset):
-    def __init__(self, images_path, labels_path):
-        with open(images_path, 'rb') as f:
-            magic, num, rows, cols = struct.unpack('>IIII', f.read(16))
-            self.images = np.frombuffer(f.read(), dtype=np.uint8).reshape(num, rows, cols)
+    def __init__(self, pt_file):
         
-        with open(labels_path, 'rb') as f:
-            magic, num = struct.unpack('>II', f.read(8))
-            self.labels = np.frombuffer(f.read(), dtype=np.uint8)
+        data = torch.load(pt_file)
+        
+        self.images = data[0].numpy()
+        self.labels = data[1].numpy()
     
     def __len__(self):
         return len(self.images)
@@ -30,8 +28,7 @@ class MNISTDataset(Dataset):
 
 def get_dataloader(args):
     train_dataset = MNISTDataset(
-        args['train_images'],
-        args['train_labels']
+        pt_file=args['train_data']
     )
 
     train_loader = DataLoader(

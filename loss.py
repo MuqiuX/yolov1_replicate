@@ -70,16 +70,16 @@ class LossModul(nn.Module):
             mask1 = obj_mask & responsible_mask
             
             loss_wh += F.mse_loss(
-                torch.sqrt(torch.clamp(pre_bbox1[mask1][..., 2:4], min=1e-6)),
-                torch.sqrt(torch.clamp(tar_bbox[mask1][..., 2:4], min=1e-6)),
+                torch.sqrt(torch.clamp(pre_bbox1[mask1][..., 2:4], min=1e-4)),
+                torch.sqrt(torch.clamp(tar_bbox[mask1][..., 2:4], min=1e-4)),
                 reduction='sum'
             )
             
             mask2 = obj_mask & (~responsible_mask)
             
             loss_wh += F.mse_loss(
-                torch.sqrt(torch.clamp(pre_bbox2[mask2][..., 2:4], min=1e-6)),
-                torch.sqrt(torch.clamp(tar_bbox[mask2][..., 2:4], min=1e-6)),
+                torch.sqrt(torch.clamp(pre_bbox2[mask2][..., 2:4], min=1e-4)),
+                torch.sqrt(torch.clamp(tar_bbox[mask2][..., 2:4], min=1e-4)),
                 reduction='sum'
             )
             
@@ -170,8 +170,9 @@ class LossModul(nn.Module):
         # 再除以长度S即可得到全局的归一化坐标
         
         # 分别创建x 和 y 方向上的 0 - 7的网格
-        grid_x = torch.arange(self.S).view(1, -1).repeat(self.S, 1).float()
-        grid_y = torch.arange(self.S).view(-1, 1).repeat(1, self.S).float()
+        device = pre_bbox1.device  # 获取输入张量的设备
+        grid_x = torch.arange(self.S, device=device).view(1, -1).repeat(self.S, 1).float()
+        grid_y = torch.arange(self.S, device=device).view(-1, 1).repeat(1, self.S).float()
         
         ratio = 1.0 / float(self.S)
         

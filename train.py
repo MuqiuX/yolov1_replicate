@@ -9,6 +9,7 @@ from torch.optim.lr_scheduler import SequentialLR, LinearLR, MultiStepLR
 import argparse
 import json
 import sys
+from tqdm import tqdm
 
 def save_checkpoint(epoch, model, optimizer, scheduler, loss, path):
     """保存检查点"""
@@ -47,34 +48,56 @@ def train_epoch(model, train_loader, loss_fn, optimizer, device):
     model.train()
     total_loss = 0.0
     num_batches = 0
-    
-    for i, data in enumerate(train_loader):
+
+    progress_bar = tqdm(enumerate(train_loader), total=len(train_loader), desc="Training", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{postfix}]')
+
+    for i, data in progress_bar:
         inputs, labels = data
-        
+
         inputs = inputs.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
-        
+
+        loss = None  # 初始化loss变量
         try:
-    
+
             optimizer.zero_grad()
             # 向前传播
             outputs = model(inputs)
             # 计算损失
             loss = loss_fn(outputs, labels)
-            # 向后传播
+            # 求导
             loss.backward()
+            # 梯度裁剪，防止梯度爆炸
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
             # 调整权重
             optimizer.step()
-            
+
             total_loss += loss.item()
             num_batches += 1
-        
+            
+            if torch.isnan(loss):
+                print(f'from pre: {torch.where(torch.isnan(outputs))}')
+                print(f'from label: {torch.where(torch.isnan(labels))}')
+
         except Exception as e:
-            print(e)
+            print(f"Error in batch {i}: {e}")
+            continue  # 跳过当前batch
         
-        if i % 100 == 99:
-            print(f'    batch {i + 1} loss: {loss.item()}')           
-    
+        # 更新进度条显示信息
+        if loss is not None:
+            avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
+            progress_bar.set_postfix({
+                'batch': i + 1,
+                'loss': f'{loss.item():.4f}',
+                'avg_loss': f'{avg_loss:.4f}'
+            })
+        else:
+            progress_bar.set_postfix({
+                'batch': i + 1,
+                'loss': 'error',
+                'avg_loss': 'N/A'
+            })
+
     mean_loss = total_loss / num_batches if num_batches > 0 else 0.0
     
     return mean_loss
@@ -135,7 +158,7 @@ def main(args: dict):
     
     # 学习率调度器
     warmup = LinearLR(optimizer, start_factor=0.1, total_iters=10)
-    decay = MultiStepLR(optimizer, milestones=['75', '105'])
+    decay = MultiStepLR(optimizer, milestones=[75, 105])
     scheduler = SequentialLR(optimizer, schedulers=[warmup, decay], milestones=[10])
     
     start_epoch = 0
@@ -174,7 +197,7 @@ def main(args: dict):
         )
         
         # 打印日志
-        print(f'Epoch {epoch} Loss train: {train_loss} val: {val_loss}')
+        print(f'Epoch {epoch + 1} Loss train: {train_loss} val: {val_loss}')
         
         # tensorbroad 记录
         writer.add_scalar('Loss/train_epoch', train_loss, epoch)

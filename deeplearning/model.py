@@ -8,10 +8,6 @@ class TwoLayerNet:
         # 训练参数
         self.lr = lr
         
-        # 临时数据
-        self.y = None
-        self.t = None
-        
         # 网络构建，使用OrderedDict模拟nn.Sequential
         self.layers = OrderedDict()
         self.layers['layer1'] = Affine(input_size, hidden_size)
@@ -40,35 +36,23 @@ class TwoLayerNet:
         return x
     
     # 计算损失
-    def loss_fn(self, y, t):
-        self.y = y
-        self.t = t
+    def get_loss(self, y, t):
+        loss_layer = self.layers['LastLayer']
         
-        if y.ndim == 1:
-            t = t.reshape(1, t.size)
-            y = y.reshape(1, y.size)
-            
-        batch_size = y.shape[0]
-        loss = -np.sum(t * np.log(y + 1e-7)) / batch_size
-        
-        return loss
+        return loss_layer.loss(y, t)
     
     # 向后求梯度
     def backward(self):
-        batch_size = self.y.shape[0]
-        
-        dout = 1.0 / batch_size
-        
         layers = list(self.layers.values())
         layers.reverse()
-        
+        dout = 1.0
         for layer in layers:
             dout = layer.backward(dout)
     
     # 更新权重
     def step(self):
         for layer in self.layers.values():
-            if(layer.w and layer.b):
+            if isinstance(layer, Affine):
                 layer.w -= layer.dw * self.lr
                 layer.b -= layer.db * self.lr
                 
